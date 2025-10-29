@@ -155,13 +155,13 @@ static void print_readmetable()
     int i = 0;
     struct device* device_found;
 
-    printf("| Device |");
+    printf("| Device | Platform |");
     for (int j = 0; j < NUM_CAPABILITIES; j++) {
         printf(" %s |", capabilities_str[j]);
     }
     printf("\n");
 
-    printf("| --- |");
+    printf("| --- | --- |");
     for (int j = 0; j < NUM_CAPABILITIES; j++) {
         printf(" --- |");
     }
@@ -169,6 +169,26 @@ static void print_readmetable()
 
     while (iterate_devices(i++, &device_found) == 0) {
         printf("| %s |", device_found->device_name);
+
+        // Display platform support based on supported_platforms flags
+        uint8_t platforms = device_found->supported_platforms;
+        if (platforms == PLATFORM_ALL) {
+            printf(" All |");
+        } else if (platforms == (PLATFORM_LINUX | PLATFORM_MACOS)) {
+            printf(" L/M |");
+        } else if (platforms == (PLATFORM_LINUX | PLATFORM_WINDOWS)) {
+            printf(" L/W |");
+        } else if (platforms == (PLATFORM_MACOS | PLATFORM_WINDOWS)) {
+            printf(" M/W |");
+        } else if (platforms == PLATFORM_LINUX) {
+            printf(" L |");
+        } else if (platforms == PLATFORM_MACOS) {
+            printf(" M |");
+        } else if (platforms == PLATFORM_WINDOWS) {
+            printf(" W |");
+        } else {
+            printf(" ? |"); // Unknown/invalid combination
+        }
 
         for (int j = 0; j < NUM_CAPABILITIES; j++) {
             if (device_has_capability(device_found, j)) {
@@ -271,7 +291,7 @@ static FeatureResult handle_feature(struct device* device_found, hid_device** de
 
     switch (cap) {
     case CAP_SIDETONE:
-        ret = device_found->send_sidetone(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_sidetone(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_BATTERY_STATUS: {
@@ -307,15 +327,15 @@ static FeatureResult handle_feature(struct device* device_found, hid_device** de
     }
 
     case CAP_NOTIFICATION_SOUND:
-        ret = device_found->notification_sound(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->notification_sound(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_LIGHTS:
-        ret = device_found->switch_lights(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->switch_lights(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_INACTIVE_TIME:
-        ret = device_found->send_inactive_time(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_inactive_time(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_CHATMIX_STATUS:
@@ -334,15 +354,15 @@ static FeatureResult handle_feature(struct device* device_found, hid_device** de
         return result;
 
     case CAP_VOICE_PROMPTS:
-        ret = device_found->switch_voice_prompts(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->switch_voice_prompts(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_ROTATE_TO_MUTE:
-        ret = device_found->switch_rotate_to_mute(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->switch_rotate_to_mute(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_EQUALIZER_PRESET:
-        ret = device_found->send_equalizer_preset(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_equalizer_preset(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_EQUALIZER:
@@ -354,23 +374,23 @@ static FeatureResult handle_feature(struct device* device_found, hid_device** de
         break;
 
     case CAP_MICROPHONE_MUTE_LED_BRIGHTNESS:
-        ret = device_found->send_microphone_mute_led_brightness(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_microphone_mute_led_brightness(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_MICROPHONE_VOLUME:
-        ret = device_found->send_microphone_volume(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_microphone_volume(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_VOLUME_LIMITER:
-        ret = device_found->send_volume_limiter(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_volume_limiter(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_BT_WHEN_POWERED_ON:
-        ret = device_found->send_bluetooth_when_powered_on(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_bluetooth_when_powered_on(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case CAP_BT_CALL_VOLUME:
-        ret = device_found->send_bluetooth_call_volume(*device_handle, (uint8_t) * (int*)param);
+        ret = device_found->send_bluetooth_call_volume(*device_handle, (uint8_t)*(int*)param);
         break;
 
     case NUM_CAPABILITIES:

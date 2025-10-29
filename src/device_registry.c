@@ -23,6 +23,7 @@
 #include "devices/steelseries_arctis_7_plus.h"
 #include "devices/steelseries_arctis_9.h"
 #include "devices/steelseries_arctis_nova_3.h"
+#include "devices/steelseries_arctis_nova_3p_wireless.h"
 #include "devices/steelseries_arctis_nova_5.h"
 #include "devices/steelseries_arctis_nova_7.h"
 #include "devices/steelseries_arctis_nova_pro_wireless.h"
@@ -70,6 +71,7 @@ void init_devices()
     add_device(elo71USB_init);
     // SteelSeries
     add_device(arctis_nova_3_init);
+    add_device(arctis_nova_3p_wireless_init);
     add_device(arctis_nova_5_init);
     add_device(arctis_nova_7_init);
     add_device(arctis_7_plus_init);
@@ -80,6 +82,21 @@ void init_devices()
 
 void add_device(void (*init_func)(struct device**))
 {
+    struct device* new_device = NULL;
+
+    // Initialize the new device
+    init_func(&new_device);
+
+    // Skip if device is NULL (platform not supported)
+    if (new_device == NULL) {
+        return;
+    }
+
+    // Set default platform support to all platforms if not specified
+    if (new_device->supported_platforms == 0) {
+        new_device->supported_platforms = PLATFORM_ALL;
+    }
+
     // Reallocate memory to accommodate the new device
     struct device** temp = realloc(devicelist, (num_devices + 1) * sizeof(struct device*));
     if (temp == NULL) {
@@ -88,8 +105,7 @@ void add_device(void (*init_func)(struct device**))
     }
     devicelist = temp;
 
-    // Initialize the new device
-    init_func(&devicelist[num_devices]);
+    devicelist[num_devices] = new_device;
     num_devices++;
 }
 
