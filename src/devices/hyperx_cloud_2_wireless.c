@@ -51,12 +51,12 @@ void hyperx_cloud_2_wireless_init(struct device** device)
 
     strncpy(device_hyperx_cloud2_wireless.device_name, "HyperX Cloud II Wireless", sizeof(device_hyperx_cloud2_wireless.device_name));
 
-    device_hyperx_cloud2_wireless.capabilities = B(CAP_BATTERY_STATUS) | B(CAP_MICROPHONE_VOLUME) | B(CAP_SIDETONE) | B(CAP_INACTIVE_TIME);
+    device_hyperx_cloud2_wireless.capabilities = B(CAP_BATTERY_STATUS) | B(CAP_INACTIVE_TIME) | B(CAP_MICROPHONE_VOLUME) | B(CAP_SIDETONE);
 
     device_hyperx_cloud2_wireless.capability_details[CAP_BATTERY_STATUS]    = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+    device_hyperx_cloud2_wireless.capability_details[CAP_INACTIVE_TIME]     = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
     device_hyperx_cloud2_wireless.capability_details[CAP_MICROPHONE_VOLUME] = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
     device_hyperx_cloud2_wireless.capability_details[CAP_SIDETONE]          = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
-    device_hyperx_cloud2_wireless.capability_details[CAP_INACTIVE_TIME]     = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
 
     device_hyperx_cloud2_wireless.request_battery        = &request_battery; // get battery percent + battery charging status
     device_hyperx_cloud2_wireless.send_inactive_time     = &set_inactive_time; // 0-90 idle time in minutes
