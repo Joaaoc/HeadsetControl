@@ -18,6 +18,16 @@
 #define CMD_GET_BATTERY_LEVEL    0x02
 #define CMD_GET_BATTERY_CHARGING 0x03
 
+#define CMD_GET_INACTIVE_TIME 0x07
+#define CMD_GET_MUTE          0x05
+#define CMD_GET_SIDETONE      0x06
+#define CMD_GET_SIDETONE_VOL  0x0B
+
+#define CMD_SET_INACTIVE_TIME 0x22
+#define CMD_SET_MUTE          0x20
+#define CMD_SET_SIDETONE      0x21
+#define CMD_SET_SIDETONE_VOL  0x23
+
 #define STATUS_SUCCESS   0
 #define ERR_HID_IO       -1
 #define ERR_TIMEOUT      -2
@@ -28,7 +38,10 @@ static struct device device_hyperx_cloud2_wireless;
 
 static const uint16_t PRODUCT_IDS[] = { ID_HYPERX_CLOUD2_WIRELESS };
 
-static BatteryInfo hyperx_cloud2_wireless_request_battery(hid_device* device_handle);
+static BatteryInfo request_battery(hid_device* device_handle);
+static int set_inactive_time(hid_device* device_handle, unsigned char value);
+static int set_microphone_volume_ext(hid_device* device_handle, unsigned char value);
+static int set_sidetone_ext(hid_device* device_handle, unsigned char value);
 
 void hyperx_cloud_2_wireless_init(struct device** device)
 {
@@ -38,15 +51,22 @@ void hyperx_cloud_2_wireless_init(struct device** device)
 
     strncpy(device_hyperx_cloud2_wireless.device_name, "HyperX Cloud II Wireless", sizeof(device_hyperx_cloud2_wireless.device_name));
 
-    device_hyperx_cloud2_wireless.capabilities                           = B(CAP_BATTERY_STATUS);
-    device_hyperx_cloud2_wireless.capability_details[CAP_BATTERY_STATUS] = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+    device_hyperx_cloud2_wireless.capabilities = B(CAP_BATTERY_STATUS) | B(CAP_MICROPHONE_VOLUME) | B(CAP_SIDETONE) | B(CAP_INACTIVE_TIME);
 
-    device_hyperx_cloud2_wireless.request_battery = &hyperx_cloud2_wireless_request_battery;
+    device_hyperx_cloud2_wireless.capability_details[CAP_BATTERY_STATUS]    = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+    device_hyperx_cloud2_wireless.capability_details[CAP_MICROPHONE_VOLUME] = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+    device_hyperx_cloud2_wireless.capability_details[CAP_SIDETONE]          = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+    device_hyperx_cloud2_wireless.capability_details[CAP_INACTIVE_TIME]     = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
+
+    device_hyperx_cloud2_wireless.request_battery        = &request_battery; // get battery percent + battery charging status
+    device_hyperx_cloud2_wireless.send_inactive_time     = &set_inactive_time; // 0-90 idle time in minutes
+    device_hyperx_cloud2_wireless.send_microphone_volume = &set_microphone_volume_ext; // 0 = MUTED | 1-128 = ACTIVE
+    device_hyperx_cloud2_wireless.send_sidetone          = &set_sidetone_ext; // 0 = OFF | 1-128 = ON based on volume
 
     *device = &device_hyperx_cloud2_wireless;
 }
 
-int hyperx_cloud2_wireless_get_raw_status(hid_device* device_handle, unsigned char cmd_id, int result_index)
+int get_raw_status(hid_device* device_handle, unsigned char cmd_id, int result_index)
 {
     if (!device_handle)
         return ERR_HID_IO;
@@ -72,7 +92,29 @@ int hyperx_cloud2_wireless_get_raw_status(hid_device* device_handle, unsigned ch
     return ERR_INVALID_RESP;
 }
 
-BatteryInfo hyperx_cloud2_wireless_request_battery(hid_device* device_handle)
+int set_raw_status(hid_device* device_handle, unsigned char cmd_id, unsigned char value)
+{
+    if (!device_handle)
+        return ERR_HID_IO;
+
+    unsigned char write_buf[WRITE_PACKET_SIZE] = { 0x06, 0xFF, 0xBB, cmd_id, value };
+    int write_res                              = hid_write(device_handle, write_buf, WRITE_PACKET_SIZE);
+    usleep(WRITE_TIMEOUT);
+    if (write_res < 0)
+        return ERR_HID_IO;
+
+    unsigned char read_buf[READ_PACKET_SIZE] = { 0x00 };
+    int read_res                             = hid_read_timeout(device_handle, read_buf, READ_PACKET_SIZE, READ_TIMEOUT);
+    if (read_res < 0)
+        return ERR_HID_IO;
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * Return BatteryInfo (charging status and battery percent)
+ */
+BatteryInfo request_battery(hid_device* device_handle)
 {
     BatteryInfo info = { .status = BATTERY_UNAVAILABLE, .level = -1 };
     if (!device_handle) {
@@ -80,7 +122,7 @@ BatteryInfo hyperx_cloud2_wireless_request_battery(hid_device* device_handle)
         return info;
     }
 
-    int raw_level = hyperx_cloud2_wireless_get_raw_status(device_handle, CMD_GET_BATTERY_LEVEL, 7);
+    int raw_level = get_raw_status(device_handle, CMD_GET_BATTERY_LEVEL, 7);
     if (raw_level < 0) {
         if (raw_level == ERR_HID_IO)
             info.status = BATTERY_HIDERROR;
@@ -92,7 +134,7 @@ BatteryInfo hyperx_cloud2_wireless_request_battery(hid_device* device_handle)
     }
     info.level = (raw_level > 100) ? 100 : raw_level;
 
-    int raw_charging = hyperx_cloud2_wireless_get_raw_status(device_handle, CMD_GET_BATTERY_CHARGING, 4);
+    int raw_charging = get_raw_status(device_handle, CMD_GET_BATTERY_CHARGING, 4);
     if (raw_charging < 0) {
         if (raw_charging == ERR_HID_IO)
             info.status = BATTERY_HIDERROR;
@@ -105,4 +147,115 @@ BatteryInfo hyperx_cloud2_wireless_request_battery(hid_device* device_handle)
     info.status = raw_charging == 1 ? BATTERY_CHARGING : BATTERY_AVAILABLE;
 
     return info;
+}
+
+/**
+ * Return microphone muted status (0 = ACTIVE, 1 = MUTED)
+ * <0 == ERROR
+ */
+int get_microphone_muted_status(hid_device* device_handle)
+{
+    return get_raw_status(device_handle, CMD_GET_MUTE, 4);
+}
+
+/**
+ * Set microphone muted status (0 = ACTIVE, 1 = MUTED)
+ */
+int set_microphone_muted_status(hid_device* device_handle, unsigned char value)
+{
+    if (value < 0 || value > 1) {
+        return HSC_OUT_OF_BOUNDS;
+    }
+    return set_raw_status(device_handle, CMD_SET_MUTE, (unsigned char)value);
+}
+
+/**
+ * Set microphone volume (0 = OFF, 1-128 = ACTIVE)
+ * It's not exactly a volume control, in practice you can only turn the microphone on or off
+ */
+int set_microphone_volume_ext(hid_device* device_handle, unsigned char value)
+{
+    if (value == 0)
+        value = 1;
+    else if (value >= 1 && value <= 128)
+        value = 0;
+    return set_microphone_muted_status(device_handle, value);
+}
+
+/**
+ * Return sidetone status (0 = OFF, 1 = ON)
+ * <0 == ERROR
+ */
+int get_sidetone_status(hid_device* device_handle)
+{
+    return get_raw_status(device_handle, CMD_GET_SIDETONE, 4);
+}
+
+/**
+ * Set sidetone status (0 = OFF, 1 = ON)
+ */
+int set_sidetone_status(hid_device* device_handle, unsigned char value)
+{
+    if (value < 0 || value > 1) {
+        return HSC_OUT_OF_BOUNDS;
+    }
+    return set_raw_status(device_handle, CMD_SET_SIDETONE, (unsigned char)value);
+}
+
+/**
+ * Return sidetone volume (0-10)
+ * <0 == ERROR
+ */
+int get_sidetone_volume(hid_device* device_handle)
+{
+    return get_raw_status(device_handle, CMD_GET_SIDETONE_VOL, 4);
+}
+
+/**
+ * Set a sidetone volume (0-10)
+ */
+int set_sidetone_volume(hid_device* device_handle, unsigned char value)
+{
+    if (value < 0 || value > 100) {
+        return HSC_OUT_OF_BOUNDS;
+    }
+    return set_raw_status(device_handle, CMD_SET_SIDETONE_VOL, (unsigned char)value);
+}
+
+/**
+ * Set a power to sidetone (0 = OFF | 1-128 = ON based on volume)
+ * Not 100% sure how volume values works
+ */
+int set_sidetone_ext(hid_device* device_handle, unsigned char value)
+{
+    if (value < 0 || value > 128) {
+        return HSC_OUT_OF_BOUNDS;
+    }
+    if (value == 0) {
+        set_sidetone_volume(device_handle, 0);
+        return set_sidetone_status(device_handle, 0);
+    }
+    value = (value / 10) - 1;
+    set_sidetone_volume(device_handle, value);
+    return set_sidetone_status(device_handle, 1);
+}
+
+/**
+ * Return inactive time to power off headset in minutes (0-90)
+ * <0 == ERROR
+ */
+int get_inactive_time(hid_device* device_handle)
+{
+    return get_raw_status(device_handle, CMD_GET_INACTIVE_TIME, 4);
+}
+
+/**
+ * Set an inactive time to power off headset in minutes (0-90)
+ */
+int set_inactive_time(hid_device* device_handle, unsigned char value)
+{
+    if (value < 0 || value > 90) {
+        return HSC_OUT_OF_BOUNDS;
+    }
+    return set_raw_status(device_handle, CMD_SET_INACTIVE_TIME, (unsigned char)value);
 }
