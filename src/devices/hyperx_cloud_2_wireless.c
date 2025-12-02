@@ -40,8 +40,8 @@ static const uint16_t PRODUCT_IDS[] = { ID_HYPERX_CLOUD2_WIRELESS };
 
 static BatteryInfo request_battery(hid_device* device_handle);
 static int set_inactive_time(hid_device* device_handle, unsigned char value);
+static int set_sidetone(hid_device* device_handle, unsigned char value);
 static int set_microphone_volume_ext(hid_device* device_handle, unsigned char value);
-static int set_sidetone_ext(hid_device* device_handle, unsigned char value);
 
 void hyperx_cloud_2_wireless_init(struct device** device)
 {
@@ -60,8 +60,8 @@ void hyperx_cloud_2_wireless_init(struct device** device)
 
     device_hyperx_cloud2_wireless.request_battery        = &request_battery; // get battery percent + battery charging status
     device_hyperx_cloud2_wireless.send_inactive_time     = &set_inactive_time; // 0-90 idle time in minutes
+    device_hyperx_cloud2_wireless.send_sidetone          = &set_sidetone; // 0 = OFF | 1-128 = ON based on volume
     device_hyperx_cloud2_wireless.send_microphone_volume = &set_microphone_volume_ext; // 0 = MUTED | 1-128 = ACTIVE
-    device_hyperx_cloud2_wireless.send_sidetone          = &set_sidetone_ext; // 0 = OFF | 1-128 = ON based on volume
 
     *device = &device_hyperx_cloud2_wireless;
 }
@@ -170,10 +170,10 @@ int set_microphone_muted_status(hid_device* device_handle, unsigned char value)
 }
 
 /**
- * Set microphone volume (0 = OFF, 1-128 = ACTIVE)
+ * Set microphone volume (0 = MUTED, 1-128 = ACTIVE)
  * It's not exactly a volume control, in practice you can only turn the microphone on or off
  */
-int set_microphone_volume_ext(hid_device* device_handle, unsigned char value)
+int set_microphone_muted_ext(hid_device* device_handle, unsigned char value)
 {
     if (value == 0)
         value = 1;
@@ -224,9 +224,8 @@ int set_sidetone_volume(hid_device* device_handle, unsigned char value)
 
 /**
  * Set a power to sidetone (0 = OFF | 1-128 = ON based on volume)
- * Not 100% sure how volume values works
  */
-int set_sidetone_ext(hid_device* device_handle, unsigned char value)
+int set_sidetone(hid_device* device_handle, unsigned char value)
 {
     if (value < 0 || value > 128) {
         return HSC_OUT_OF_BOUNDS;
