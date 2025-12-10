@@ -40,8 +40,6 @@ static const uint16_t PRODUCT_IDS[] = { ID_HYPERX_CLOUD2_WIRELESS };
 
 static BatteryInfo request_battery(hid_device* device_handle);
 static int set_inactive_time(hid_device* device_handle, unsigned char value);
-static int set_sidetone(hid_device* device_handle, unsigned char value);
-static int set_microphone_volume_ext(hid_device* device_handle, unsigned char value);
 
 void hyperx_cloud_2_wireless_init(struct device** device)
 {
@@ -55,13 +53,9 @@ void hyperx_cloud_2_wireless_init(struct device** device)
 
     device_hyperx_cloud2_wireless.capability_details[CAP_BATTERY_STATUS]    = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
     device_hyperx_cloud2_wireless.capability_details[CAP_INACTIVE_TIME]     = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
-    device_hyperx_cloud2_wireless.capability_details[CAP_MICROPHONE_VOLUME] = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
-    device_hyperx_cloud2_wireless.capability_details[CAP_SIDETONE]          = (struct capability_detail) { .usagepage = 0xFF90, .usageid = 0x0303, .interface = 0x0000 };
 
     device_hyperx_cloud2_wireless.request_battery        = &request_battery; // get battery percent + battery charging status
     device_hyperx_cloud2_wireless.send_inactive_time     = &set_inactive_time; // 0-90 idle time in minutes
-    device_hyperx_cloud2_wireless.send_sidetone          = &set_sidetone; // 0 = OFF | 1-128 = ON based on volume
-    device_hyperx_cloud2_wireless.send_microphone_volume = &set_microphone_volume_ext; // 0 = MUTED | 1-128 = ACTIVE
 
     *device = &device_hyperx_cloud2_wireless;
 }
@@ -147,96 +141,6 @@ BatteryInfo request_battery(hid_device* device_handle)
     info.status = raw_charging == 1 ? BATTERY_CHARGING : BATTERY_AVAILABLE;
 
     return info;
-}
-
-/**
- * Return microphone muted status (0 = ACTIVE, 1 = MUTED)
- * <0 == ERROR
- */
-int get_microphone_muted_status(hid_device* device_handle)
-{
-    return get_raw_status(device_handle, CMD_GET_MUTE, 4);
-}
-
-/**
- * Set microphone muted status (0 = ACTIVE, 1 = MUTED)
- */
-int set_microphone_muted_status(hid_device* device_handle, unsigned char value)
-{
-    if (value < 0 || value > 1) {
-        return HSC_OUT_OF_BOUNDS;
-    }
-    return set_raw_status(device_handle, CMD_SET_MUTE, (unsigned char)value);
-}
-
-/**
- * Set microphone volume (0 = MUTED, 1-128 = ACTIVE)
- * It's not exactly a volume control, in practice you can only turn the microphone on or off
- */
-int set_microphone_muted_ext(hid_device* device_handle, unsigned char value)
-{
-    if (value == 0)
-        value = 1;
-    else if (value >= 1 && value <= 128)
-        value = 0;
-    return set_microphone_muted_status(device_handle, value);
-}
-
-/**
- * Return sidetone status (0 = OFF, 1 = ON)
- * <0 == ERROR
- */
-int get_sidetone_status(hid_device* device_handle)
-{
-    return get_raw_status(device_handle, CMD_GET_SIDETONE, 4);
-}
-
-/**
- * Set sidetone status (0 = OFF, 1 = ON)
- */
-int set_sidetone_status(hid_device* device_handle, unsigned char value)
-{
-    if (value < 0 || value > 1) {
-        return HSC_OUT_OF_BOUNDS;
-    }
-    return set_raw_status(device_handle, CMD_SET_SIDETONE, (unsigned char)value);
-}
-
-/**
- * Return sidetone volume (0-10)
- * <0 == ERROR
- */
-int get_sidetone_volume(hid_device* device_handle)
-{
-    return get_raw_status(device_handle, CMD_GET_SIDETONE_VOL, 4);
-}
-
-/**
- * Set a sidetone volume (0-10)
- */
-int set_sidetone_volume(hid_device* device_handle, unsigned char value)
-{
-    if (value < 0 || value > 100) {
-        return HSC_OUT_OF_BOUNDS;
-    }
-    return set_raw_status(device_handle, CMD_SET_SIDETONE_VOL, (unsigned char)value);
-}
-
-/**
- * Set a power to sidetone (0 = OFF | 1-128 = ON based on volume)
- */
-int set_sidetone(hid_device* device_handle, unsigned char value)
-{
-    if (value < 0 || value > 128) {
-        return HSC_OUT_OF_BOUNDS;
-    }
-    if (value == 0) {
-        set_sidetone_volume(device_handle, 0);
-        return set_sidetone_status(device_handle, 0);
-    }
-    value = (value / 10) - 1;
-    set_sidetone_volume(device_handle, value);
-    return set_sidetone_status(device_handle, 1);
 }
 
 /**
